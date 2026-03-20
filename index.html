@@ -29,7 +29,7 @@
             maxZoom: 20
         }).addTo(map);
 
-        // --- 1. CARICHIAMO LE PROVINCE (Linee interne ben visibili) ---
+        // --- 1. PROVINCE IN NERO, BEN MARCATE ---
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
         fetch(urlProvince)
             .then(response => response.json())
@@ -37,16 +37,16 @@
                 L.geoJSON(data, {
                     style: function (feature) {
                         return {
-                            color: "#8B4513", // Marrone scuro (SaddleBrown)
-                            weight: 1.5,      // Spessore raddoppiato rispetto a prima!
-                            opacity: 0.8,
+                            color: "#000000", // Nero puro
+                            weight: 2.0,      // Spessore deciso (Grassetto)
+                            opacity: 1.0,     // Opacità massima
                             fillOpacity: 0.0
                         };
                     }
                 }).addTo(map);
             });
 
-        // --- 2. CARICHIAMO LE REGIONI (Sopra le province, linee belle grosse) ---
+        // --- 2. REGIONI IN NERO, ANCORA PIÙ MARCATE ---
         var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
         fetch(urlRegioni)
             .then(response => response.json())
@@ -54,13 +54,13 @@
                 L.geoJSON(data, {
                     style: function (feature) {
                         return {
-                            color: "#2B2B2B", // Antracite/Quasi Nero
-                            weight: 3.5,      // Molto marcato (spessore triplo)
-                            opacity: 1.0,
+                            color: "#000000", // Nero puro
+                            weight: 4.5,      // Spessore enorme (stile pennarello)
+                            opacity: 1.0,     // Opacità massima
                             fillOpacity: 0.0
                         };
                     },
-                    interactive: false // Fondamentale: impedisce che le linee grosse blocchino il clic del mouse
+                    interactive: false // Non interferisce coi click
                 }).addTo(map);
             });
 
