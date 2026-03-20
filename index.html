@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mappa Italia</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; background-color: #FDF6E3; } /* Sfondo mare colore pergamena */
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // Inizializza la mappa centrata sull'Italia, zoom bloccato
+        var map = L.map('map', {
+            center: [41.8719, 12.5674],
+            zoom: 6,
+            minZoom: 5,
+            maxZoom: 10,
+            zoomControl: false // Niente bottoni + e -
+        });
+
+        // Stile "CartoDB Positron No Labels" (Super pulito, quasi pergamena, senza scritte)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        var markerGiocatore;
+
+        // Quando l'utente tocca la mappa
+        map.on('click', function(e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
+
+            // Sposta o crea il pin del giocatore
+            if (markerGiocatore) {
+                markerGiocatore.setLatLng(e.latlng);
+            } else {
+                markerGiocatore = L.marker(e.latlng).addTo(map);
+            }
+
+            // INVIA LE COORDINATE A FLUTTERFLOW!
+            if (window.Print) {
+                window.Print.postMessage(lat + "," + lng);
+            }
+        });
+
+        // NOTA: I confini delle province li aggiungeremo nel prossimo step per non fare casino!
+    </script>
+</body>
+</html>
