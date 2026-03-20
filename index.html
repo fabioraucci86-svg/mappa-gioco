@@ -8,49 +8,63 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         body { margin: 0; padding: 0; }
-        #map { width: 100vw; height: 100vh; background-color: #FDF6E3; } /* Sfondo mare colore pergamena */
+        #map { width: 100vw; height: 100vh; background-color: #FDF6E3; } 
     </style>
 </head>
 <body>
     <div id="map"></div>
     <script>
-        // Inizializza la mappa centrata sull'Italia, zoom bloccato
         var map = L.map('map', {
             center: [41.8719, 12.5674],
             zoom: 6,
             minZoom: 5,
             maxZoom: 10,
-            zoomControl: false // Niente bottoni + e -
+            zoomControl: false 
         });
 
-        // Stile "CartoDB Positron No Labels" (Super pulito, quasi pergamena, senza scritte)
+        // Sfondo minimalista senza scritte
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
+        // --- ECCO LA MAGIA: CARICHIAMO IL GEOJSON DI OPENPOLIS ---
+        var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
+        
+        fetch(urlProvince)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function (feature) {
+                        return {
+                            color: "#8C7B65", // Colore Marrone/Bronzo elegante per i confini
+                            weight: 1.2,      // Spessore perfetto per le province
+                            opacity: 0.9,     // Visibilità bella marcata
+                            fillOpacity: 0.0  // Sfondo trasparente
+                        };
+                    }
+                }).addTo(map);
+            });
+        // -----------------------------------------------------------
+
         var markerGiocatore;
 
-        // Quando l'utente tocca la mappa
         map.on('click', function(e) {
             var lat = e.latlng.lat;
             var lng = e.latlng.lng;
 
-            // Sposta o crea il pin del giocatore
             if (markerGiocatore) {
                 markerGiocatore.setLatLng(e.latlng);
             } else {
                 markerGiocatore = L.marker(e.latlng).addTo(map);
             }
 
-            // INVIA LE COORDINATE A FLUTTERFLOW!
+            // Invia le coordinate a FlutterFlow
             if (window.Print) {
                 window.Print.postMessage(lat + "," + lng);
             }
         });
-
-        // NOTA: I confini delle province li aggiungeremo nel prossimo step per non fare casino!
     </script>
 </body>
 </html>
