@@ -22,31 +22,47 @@
             zoomControl: false 
         });
 
-        // Sfondo minimalista senza scritte
+        // Sfondo pulito senza scritte
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // --- ECCO LA MAGIA: CARICHIAMO IL GEOJSON DI OPENPOLIS ---
+        // --- 1. CARICHIAMO LE PROVINCE (Linee interne ben visibili) ---
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
-        
         fetch(urlProvince)
             .then(response => response.json())
             .then(data => {
                 L.geoJSON(data, {
                     style: function (feature) {
                         return {
-                            color: "#8C7B65", // Colore Marrone/Bronzo elegante per i confini
-                            weight: 1.2,      // Spessore perfetto per le province
-                            opacity: 0.9,     // Visibilità bella marcata
-                            fillOpacity: 0.0  // Sfondo trasparente
+                            color: "#8B4513", // Marrone scuro (SaddleBrown)
+                            weight: 1.5,      // Spessore raddoppiato rispetto a prima!
+                            opacity: 0.8,
+                            fillOpacity: 0.0
                         };
                     }
                 }).addTo(map);
             });
-        // -----------------------------------------------------------
+
+        // --- 2. CARICHIAMO LE REGIONI (Sopra le province, linee belle grosse) ---
+        var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
+        fetch(urlRegioni)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function (feature) {
+                        return {
+                            color: "#2B2B2B", // Antracite/Quasi Nero
+                            weight: 3.5,      // Molto marcato (spessore triplo)
+                            opacity: 1.0,
+                            fillOpacity: 0.0
+                        };
+                    },
+                    interactive: false // Fondamentale: impedisce che le linee grosse blocchino il clic del mouse
+                }).addTo(map);
+            });
 
         var markerGiocatore;
 
