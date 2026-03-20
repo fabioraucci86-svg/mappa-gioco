@@ -29,7 +29,7 @@
             maxZoom: 20
         }).addTo(map);
 
-        // --- 1. PROVINCE IN NERO, BEN MARCATE ---
+        // --- 1. PROVINCE (Sottili e Grigie) ---
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
         fetch(urlProvince)
             .then(response => response.json())
@@ -37,16 +37,16 @@
                 L.geoJSON(data, {
                     style: function (feature) {
                         return {
-                            color: "#000000", // Nero puro
-                            weight: 2.0,      // Spessore deciso (Grassetto)
-                            opacity: 1.0,     // Opacità massima
+                            color: "#666666", // Grigio medio
+                            weight: 0.8,      // Molto sottile
+                            opacity: 0.8,
                             fillOpacity: 0.0
                         };
                     }
                 }).addTo(map);
             });
 
-        // --- 2. REGIONI IN NERO, ANCORA PIÙ MARCATE ---
+        // --- 2. REGIONI (Nere, spessore elegante) ---
         var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
         fetch(urlRegioni)
             .then(response => response.json())
@@ -55,12 +55,12 @@
                     style: function (feature) {
                         return {
                             color: "#000000", // Nero puro
-                            weight: 4.5,      // Spessore enorme (stile pennarello)
-                            opacity: 1.0,     // Opacità massima
+                            weight: 2.0,      // Spessore medio-sottile
+                            opacity: 1.0,
                             fillOpacity: 0.0
                         };
                     },
-                    interactive: false // Non interferisce coi click
+                    interactive: false 
                 }).addTo(map);
             });
 
@@ -77,8 +77,8 @@
             }
 
             // Invia le coordinate a FlutterFlow
-            if (window.Print) {
-                window.Print.postMessage(lat + "," + lng);
+            if (window.MappaChannel) {
+                window.MappaChannel.postMessage(lat + "," + lng);
             }
         });
     </script>
