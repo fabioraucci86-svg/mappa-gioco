@@ -94,8 +94,19 @@
                 distanzaKm = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
             }
             
-            // Invia immediatamente il numero di KM a FlutterFlow
-            window.parent.postMessage(distanzaKm.toFixed(2), "*");
+            let risultato = distanzaKm.toFixed(2);
+
+            // 1. TENTATIVO PER ANDROID (Usa il canale Javascript)
+            try {
+                if (typeof MappaChannel !== 'undefined') {
+                    MappaChannel.postMessage(risultato);
+                }
+            } catch(e) { console.log("Canale Android non trovato"); }
+
+            // 2. TENTATIVO PER WEB (Usa il parent postMessage)
+            try {
+                window.parent.postMessage(risultato, "*");
+            } catch(e) { console.log("Canale Web non trovato"); }
         }
 
         // 1. DISEGNA I CONFINI DELLE REGIONI (Più spessi, solo visivi)
