@@ -10,20 +10,20 @@
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
         
-        /* Confini delle province resi più "leggeri" e invisibili di base */
+        /* Confini delle province resi SOTTILISSIMI e chiarissimi */
         path.leaflet-interactive {
             fill: #FDF6E3; 
-            fill-opacity: 0.0; /* Completamente trasparente per far vedere la mappa */
-            stroke: #A89F91;   /* Colore del bordo più delicato */
-            stroke-width: 1.0; /* Bordo più sottile */
+            fill-opacity: 0.0; 
+            stroke: #d3ccc0;   /* Colore grigio/sabbia molto chiaro */
+            stroke-width: 0.5; /* Bordo dimezzato, quasi invisibile */
             transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
         
         /* Effetto "illuminazione" al passaggio del mouse */
         path.leaflet-interactive:hover { 
             fill: #EBE0C9; 
-            fill-opacity: 0.6; /* Si colora e diventa semitrasparente */
-            stroke-width: 1.5; /* Il bordo si ingrossa leggermente */
+            fill-opacity: 0.6; 
+            stroke-width: 1.0; /* Torna leggermente visibile al passaggio */
         }
         
         .leaflet-control-zoom { display: block !important; }
