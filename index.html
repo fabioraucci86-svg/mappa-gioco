@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ItalGeo Map - Polling Version</title>
+    <title>ItalGeo Map - Pro Version</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
         
-        /* Stile Province (Sottili) - MANTENUTO */
         path.leaflet-interactive {
             fill: #FDF6E3; 
             fill-opacity: 0.0; 
@@ -32,12 +31,15 @@
     <div id="map"></div>
 
     <script>
-        // --- 1. VARIABILI GLOBALI (LAVAGNA) ---
-        window.lastDistance = 123.45; // Test iniziale
-        window.lastScore = 5000;
-        
+        // --- 1. VARIABILI DI STATO ---
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
+        let TARGET_NOME_PROVINCIA = ""; // Il nome della provincia da indovinare
+
+        let lastClickedLat = null;
+        let lastClickedLon = null;
+        let lastClickedProvincia = ""; // La provincia dove l'utente ha cliccato
+        
         let markerGiocatore = null;
 
         // Inizializzazione mappa
@@ -60,25 +62,23 @@
             iconAnchor: [20, 40] 
         });
 
-        // --- 2. RICEZIONE TARGET (MODIFICATA PER OGGETTI) ---
+        // --- 2. ASCOLTATORE COMANDI DA FLUTTERFLOW ---
         window.addEventListener("message", function(event) {
-            console.log("MAPPA: Messaggio ricevuto:", event.data);
-            
-            // Gestione formato OGGETTO (quello nuovo del widget Dart)
+            // Ricezione Target (Coordinate + Nome Provincia)
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
-                console.log("MAPPA: Bersaglio impostato (Oggetto):", TARGET_LAT, TARGET_LON);
+                TARGET_NOME_PROVINCIA = event.data.nomeProvincia; 
+                console.log("MAPPA: Target impostato ->", TARGET_NOME_PROVINCIA);
             } 
-            // Gestione formato STRINGA (vecchio formato per compatibilità)
-            else if (typeof event.data === 'string' && event.data.includes(',')) {
-                let coords = event.data.split(',');
-                TARGET_LAT = parseFloat(coords[0]);
-                TARGET_LON = parseFloat(coords[1]);
-                console.log("MAPPA: Bersaglio impostato (Stringa):", TARGET_LAT, TARGET_LON);
+            
+            // Ricezione Comando Conferma
+            if (event.data?.type === "CONFERMA") {
+                calcolaEInviaRisultato();
             }
         });
 
+        // Formula Haversine per la distanza
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -88,44 +88,46 @@
             return R * c; 
         }
 
-        function calcolaPunteggio(dist) {
-            const maxScore = 5000;
-            return Math.round(maxScore * Math.exp(-dist / 200));
+        // --- 3. LOGICA DI INVIO RISULTATO ---
+        function calcolaEInviaRisultato() {
+            if (!lastClickedLat) {
+                console.log("MAPPA: Nessun punto cliccato!");
+                return;
+            }
+
+            let distanzaFinale = 0;
+
+            // CONTROLLO SAGOMA: Se la provincia cliccata è quella corretta -> 0 KM
+            if (lastClickedProvincia && TARGET_NOME_PROVINCIA && 
+                lastClickedProvincia.toLowerCase().trim() === TARGET_NOME_PROVINCIA.toLowerCase().trim()) {
+                distanzaFinale = 0.00;
+                console.log("MAPPA: Centro pieno sulla provincia! 0 KM");
+            } else {
+                distanzaFinale = getDistanceFromLatLonInKm(lastClickedLat, lastClickedLon, TARGET_LAT, TARGET_LON);
+                console.log("MAPPA: Calcolo distanza dal centro:", distanzaFinale);
+            }
+
+            // Invia il risultato a FlutterFlow
+            window.parent.postMessage({
+                "type": "DISTANCE_RESULT",
+                "value": distanzaFinale.toFixed(2)
+            }, "*");
         }
 
-        // --- 3. FUNZIONE CORE (URLEÀ IL RISULTATO) ---
-        function piazzaSegnalino(latlng) {
+        function gestisciClickMappa(latlng, nomeProvinciaCliccata) {
+            // Muove il marker
             if (markerGiocatore) markerGiocatore.setLatLng(latlng);
             else markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
 
-            console.log("MAPPA: Click a", latlng.lat, latlng.lng);
-
-            if (TARGET_LAT !== 0.0) {
-                const dist = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
-                const score = calcolaPunteggio(dist);
-                const risultato = dist.toFixed(2);
-
-                // Aggiorniamo window per il polling (Piano B)
-                window.lastDistance = risultato;
-                window.lastScore = score;
-                
-                console.log("MAPPA: Distanza calcolata:", risultato);
-
-                // URLEÀ il risultato al genitore (Piano A - Il più potente)
-                try {
-                    window.parent.postMessage({
-                        "type": "DISTANCE_RESULT",
-                        "value": risultato
-                    }, "*");
-                } catch(e) {
-                    console.error("MAPPA: Errore postMessage:", e);
-                }
-            } else {
-                console.warn("MAPPA: Bersaglio non ancora ricevuto (è ancora 0.0)");
-            }
+            // Memorizza i dati del click localmente
+            lastClickedLat = latlng.lat;
+            lastClickedLon = latlng.lng;
+            lastClickedProvincia = nomeProvinciaCliccata;
+            
+            console.log("MAPPA: Click registrato su " + nomeProvinciaCliccata + ". In attesa di conferma...");
         }
 
-        // 4. DISEGNA I CONFINI REGIONI
+        // 4. DISEGNA I CONFINI REGIONI (Solo visuale)
         fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
             .then(res => res.json())
             .then(data => {
@@ -134,14 +136,16 @@
                 }).addTo(map);
             });
 
-        // 5. DISEGNA LE PROVINCE
+        // 5. DISEGNA LE PROVINCE (Interattive per il click)
         fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
             .then(res => res.json())
             .then(data => {
                 L.geoJSON(data, {
                     onEachFeature: function (feature, layer) {
                         layer.on('click', function (e) {
-                            piazzaSegnalino(e.latlng);
+                            // Prende il nome della provincia dai dati GeoJSON
+                            let nomeProv = feature.properties.prov_name || "";
+                            gestisciClickMappa(e.latlng, nomeProv);
                             L.DomEvent.stopPropagation(e);
                         });
                     }
