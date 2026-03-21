@@ -71,9 +71,7 @@
             }
 
             // Invia SOLTANTO il numero dei chilometri a FlutterFlow
-            if (window.FFJavaScriptChannel) {
-                window.FFJavaScriptChannel.postMessage(distanzaKm.toFixed(2));
-            }
+window.parent.postMessage(distanzaKm.toFixed(2), "*");
         });
 
         // 2. CONFINI ITALIANI (Usiamo il link sicuro e funzionante)
