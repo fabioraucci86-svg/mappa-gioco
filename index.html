@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ItalGeo Quiz Map</title>
+    <title>Mappa Italia</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
@@ -103,7 +103,23 @@
             piazzaSegnalino(e.latlng);
         });
 
-        // Disegna le province italiane
+        // 1. DISEGNA I CONFINI DELLE REGIONI (Più spessi, solo visivi)
+        var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
+        fetch(urlRegioni)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: {
+                        color: '#8C7B65',   // Colore del bordo della regione
+                        weight: 2.5,        // Spessore del bordo (puoi modificarlo)
+                        fillOpacity: 0.0,   // Interno trasparente
+                        interactive: false  // Lascia passare i click alle province sottostanti
+                    }
+                }).addTo(map);
+            })
+            .catch(error => console.error('Errore GeoJSON Regioni:', error));
+
+        // 2. Disegna le province italiane
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
         fetch(urlProvince)
             .then(response => response.json())
