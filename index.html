@@ -7,29 +7,12 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
-        /* STILE CSS MINIMALISTA */
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #EBE8DF; /* Sfondo Pietra Chiaro per il mare */
-        }
-        #map {
-            width: 100vw;
-            height: 100vh;
-        }
-        /* Stile per i poligoni GeoJSON (l'Italia) */
+        body { margin: 0; padding: 0; background-color: #EBE8DF; }
+        #map { width: 100vw; height: 100vh; }
         path.leaflet-interactive {
-            fill: #FDF6E3; /* Il tuo colore crema per la terra */
-            fill-opacity: 1;
-            stroke: #8C7B65; /* Bronzo per i confini */
-            stroke-width: 1.5;
-            transition: fill 0.3s; /* Animazione morbida per l'hover */
+            fill: #FDF6E3; fill-opacity: 1; stroke: #8C7B65; stroke-width: 1.5; transition: fill 0.3s;
         }
-        /* Effetto hover sulla terra */
-        path.leaflet-interactive:hover {
-            fill: #EBE0C9; /* Un crema leggermente più scuro al passaggio */
-        }
-        /* Nasconde i controlli di zoom (opzionale per minimalismo) */
+        path.leaflet-interactive:hover { fill: #EBE0C9; }
         .leaflet-control-zoom { display: none; }
         .leaflet-control-attribution { font-size: 8px; }
     </style>
@@ -37,59 +20,58 @@
 <body>
     <div id="map"></div>
     <script>
-        // --- CONFIGURAZIONE GIOCO ---
-        // Coordinate target (es. Roma) - Cambia queste per ogni livello!
-        const TARGET_LAT = 41.8902; 
-        const TARGET_LON = 12.4922;
+        // Variabili per il bersaglio (vengono aggiornate da FlutterFlow)
+        let TARGET_LAT = 0.0;
+        let TARGET_LON = 0.0;
+        let markerGiocatore;
 
-        // Inizializza la mappa centrata sull'Italia (coordinate geografiche reali)
         var map = L.map('map').setView([41.8719, 12.5674], 6);
 
-        // --- FORMULA DI HAVERSINE (CALCOLO DISTANZA IN KM) ---
+        // Ascolta il messaggio da FlutterFlow con le coordinate della città estratta
+        window.addEventListener("message", function(event) {
+            console.log("Messaggio ricevuto: ", event.data);
+            if (event.data && typeof event.data === 'string' && event.data.includes(',')) {
+                let coords = event.data.split(',');
+                TARGET_LAT = parseFloat(coords[0]);
+                TARGET_LON = parseFloat(coords[1]);
+            }
+        });
+
+        // Formula di Haversine (dal tuo amico)
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Raggio della Terra in km
+            const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = 
-                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; // Distanza in KM
+            return R * c; 
         }
 
-        // --- GESTIONE CLICCATA E INVIO MESSAGGIO ---
         map.on('click', function(e) {
             const clickLat = e.latlng.lat;
             const clickLon = e.latlng.lng;
 
-            // Calcola la distanza reale in KM
+            // Sposta o crea il pin del giocatore
+            if (markerGiocatore) {
+                markerGiocatore.setLatLng(e.latlng);
+            } else {
+                markerGiocatore = L.marker(e.latlng).addTo(map);
+            }
+
+            // Calcola la distanza
             const distanzaKm = getDistanceFromLatLonInKm(clickLat, clickLon, TARGET_LAT, TARGET_LON);
 
-            // Per testare nel browser (puoi cancellare queste 2 righe dopo):
-            // L.popup().setLatLng(e.latlng).setContent("Hai cliccato! Distanza: " + distanzaKm.toFixed(2) + " km").openOn(map);
-            console.log("Distanza calcolata: " + distanzaKm.toFixed(2) + " km");
-
-            // *** IL COMANDO MAGICO PER FLUTTERFLOW ***
-            // Invia la distanza come stringa. FFJavaScriptChannel è il nome configurato su FlutterFlow.
-            // .toFixed(2) arrotonda a 2 decimali per pulizia.
-            FFJavaScriptChannel.postMessage(distanzaKm.toFixed(2));
+            // Invia a FlutterFlow (Distanza,LatTocco,LngTocco)
+            if (window.FFJavaScriptChannel) {
+                window.FFJavaScriptChannel.postMessage(distanzaKm.toFixed(2) + "|" + clickLat + "," + clickLon);
+            }
         });
 
-        // --- CARICAMENTO DATI GEOGRAFICI (GEOJSON) ---
-        // Recuperiamo un file GeoJSON delle province italiane da un repository GitHub affidabile (gratis)
         fetch('https://raw.githubusercontent.com/openbiostat/geojson-italy/master/limits_it_provinces.json')
             .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: {
-                        // Lo stile è già definito nel CSS, quindi qui possiamo lasciare vuoto
-                        // o sovrascrivere se necessario.
-                    }
-                }).addTo(map);
-            })
-            .catch(error => console.error('Errore nel caricamento del GeoJSON:', error));
+            .then(data => L.geoJSON(data).addTo(map))
+            .catch(error => console.error('Errore GeoJSON:', error));
 
-        // Blocca lo zoom con la rotellina del mouse e il trascinamento eccessivo per minimalismo
         map.scrollWheelZoom.disable();
     </script>
 </body>
