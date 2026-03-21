@@ -32,15 +32,15 @@
     <div id="map"></div>
 
     <script>
-        // --- 1. VARIABILI GLOBALI (La "Lavagna" per il polling) ---
-        window.lastDistance = null;
-        window.lastScore = null;
+        // --- 1. VARIABILI GLOBALI (TEST DEL 123 ATTIVO) ---
+        window.lastDistance = 123.45; // <--- VALORE FORZATO PER IL TEST
+        window.lastScore = 5000;
         
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let markerGiocatore = null;
-        let targetMarker = null; // Per mostrare dove era il punto reale
-        let line = null;         // Linea tra click e target
+        let targetMarker = null; 
+        let line = null;         
 
         // Inizializzazione mappa
         var map = L.map('map', {
@@ -62,9 +62,8 @@
             iconAnchor: [20, 40] 
         });
 
-        // --- 2. RICEZIONE TARGET (Con controllo tipo messaggio) ---
+        // --- 2. RICEZIONE TARGET ---
         window.addEventListener("message", function(event) {
-            // Supportiamo sia il formato stringa che l'oggetto suggerito dal tecnico
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
@@ -77,7 +76,7 @@
             }
         });
 
-        // Formula Haversine (Distanza)
+        // Formula Haversine
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -87,16 +86,13 @@
             return R * c; 
         }
 
-        // Sistema Punteggio (Stile GeoGuessr)
         function calcolaPunteggio(dist) {
             const maxScore = 5000;
-            // Formula: il punteggio cala esponenzialmente con la distanza
             return Math.round(maxScore * Math.exp(-dist / 200));
         }
 
-        // --- 3. FUNZIONE CORE: PIAZZA E SCRIVI DATI ---
+        // --- 3. FUNZIONE CORE ---
         function piazzaSegnalino(latlng) {
-            // Sposta marker giocatore
             if (markerGiocatore) markerGiocatore.setLatLng(latlng);
             else markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
 
@@ -104,18 +100,17 @@
                 const dist = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
                 const score = calcolaPunteggio(dist);
 
-                // 👉 SALVATAGGIO SULLA LAVAGNA (Polling)
+                // Qui il test verrebbe sovrascritto dal calcolo reale se clicchi
                 window.lastDistance = dist.toFixed(2);
                 window.lastScore = score;
 
-                // TENTATIVO POSTMESSAGE (Come backup)
                 try {
                     window.top.postMessage(dist.toFixed(2), "*");
                 } catch(e) {}
             }
         }
 
-        // 4. DISEGNA I CONFINI REGIONI (Solo estetici)
+        // 4. DISEGNA I CONFINI REGIONI
         fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
             .then(res => res.json())
             .then(data => {
@@ -124,11 +119,11 @@
                 }).addTo(map);
             });
 
-        // 5. DISEGNA LE PROVINCE (Interattive)
+        // 5. DISEGNA LE PROVINCE
         fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
             .then(res => res.json())
             .then(data => {
-                L.geoJSON(data, {
+                geojson = L.geoJSON(data, {
                     onEachFeature: function (feature, layer) {
                         layer.on('click', function (e) {
                             piazzaSegnalino(e.latlng);
