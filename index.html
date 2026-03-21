@@ -10,54 +10,36 @@
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
         
-        /* Stile delle province: fill-opacity bassa per vedere la mappa sotto */
+        /* Confini delle province resi più "leggeri" e invisibili di base */
         path.leaflet-interactive {
             fill: #FDF6E3; 
-            fill-opacity: 0.2; 
-            stroke: #8C7B65; 
-            stroke-width: 1.5; 
-            transition: fill 0.3s;
-        }
-        path.leaflet-interactive:hover { 
-            fill: #EBE0C9; 
-            fill-opacity: 0.5; 
+            fill-opacity: 0.0; /* Completamente trasparente per far vedere la mappa */
+            stroke: #A89F91;   /* Colore del bordo più delicato */
+            stroke-width: 1.0; /* Bordo più sottile */
+            transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
         
-        /* Rimosso display:none per mostrare i tasti + e - dello zoom */
+        /* Effetto "illuminazione" al passaggio del mouse */
+        path.leaflet-interactive:hover { 
+            fill: #EBE0C9; 
+            fill-opacity: 0.6; /* Si colora e diventa semitrasparente */
+            stroke-width: 1.5; /* Il bordo si ingrossa leggermente */
+        }
+        
         .leaflet-control-zoom { display: block !important; }
         .leaflet-control-attribution { font-size: 8px; }
-
-        #btn-conferma {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 1000;
-            padding: 15px 30px;
-            background-color: #2c3e50;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            cursor: pointer;
-            display: none;
-        }
-        #btn-conferma:hover { background-color: #34495e; }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <button id="btn-conferma">Conferma Posizione</button>
 
     <script>
+        // Variabili globali
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let markerGiocatore = null;
-        let coordinateScelte = null;
 
-        // Inizializzazione mappa con controlli zoom ATTIVI
+        // Inizializzazione della mappa
         var map = L.map('map', {
             zoomControl: true,
             scrollWheelZoom: true,
@@ -65,28 +47,30 @@
             touchZoom: true
         }).setView([41.8719, 12.5674], 6);
 
+        // Aggiunta dello sfondo (strade, mari, ecc.)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // ICONA PERSONALIZZATA
+        // IL TUO SEGNALINO PERSONALIZZATO
         var iconaPersonalizzata = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', 
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', // Ricorda di mettere il tuo link PNG!
             iconSize: [40, 40],
-            iconAnchor: [20, 40]
+            iconAnchor: [20, 40] 
         });
 
+        // Riceve le coordinate da FlutterFlow
         window.addEventListener("message", function(event) {
             if (event.data && typeof event.data === 'string' && event.data.includes(',')) {
                 let coords = event.data.split(',');
                 TARGET_LAT = parseFloat(coords[0]);
                 TARGET_LON = parseFloat(coords[1]);
-                console.log("Target ricevuto:", TARGET_LAT, TARGET_LON);
             }
         });
 
+        // Formula per calcolare i KM in linea d'aria
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -96,50 +80,39 @@
             return R * c; 
         }
 
+        // Funzione che sposta il segnalino e invia i dati a FlutterFlow in tempo reale
         function piazzaSegnalino(latlng) {
-            coordinateScelte = latlng;
             if (markerGiocatore) {
                 markerGiocatore.setLatLng(latlng);
             } else {
                 markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
-                document.getElementById('btn-conferma').style.display = 'block';
             }
+
+            // Calcola la distanza
+            let distanzaKm = 0;
+            if (TARGET_LAT !== 0.0) {
+                distanzaKm = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
+            }
+            
+            // Invia immediatamente il numero di KM a FlutterFlow
+            window.parent.postMessage(distanzaKm.toFixed(2), "*");
         }
 
-        // Click sulla mappa (sfondo)
+        // Se clicchi sul mare o fuori dall'Italia
         map.on('click', function(e) {
             piazzaSegnalino(e.latlng);
         });
 
-        // Click sul tasto Conferma
-        document.getElementById('btn-conferma').addEventListener('click', function() {
-            if (!coordinateScelte) return;
-
-            let distanzaKm = 0;
-            // Se non abbiamo ancora ricevuto le coordinate target, usiamo un valore di test
-            // o mettiamo un alert per debug
-            if (TARGET_LAT === 0.0) {
-                console.warn("Attenzione: TARGET_LAT è ancora 0. Verifica il messaggio da FlutterFlow.");
-            }
-            
-            distanzaKm = getDistanceFromLatLonInKm(coordinateScelte.lat, coordinateScelte.lng, TARGET_LAT, TARGET_LON);
-            
-            console.log("Distanza calcolata:", distanzaKm.toFixed(2));
-            window.parent.postMessage(distanzaKm.toFixed(2), "*");
-            this.style.display = 'none'; 
-        });
-
-        // Caricamento Province
+        // Disegna le province italiane
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
         fetch(urlProvince)
             .then(response => response.json())
             .then(data => {
                 L.geoJSON(data, {
                     onEachFeature: function (feature, layer) {
+                        // Se clicchi dentro una provincia
                         layer.on('click', function (e) {
-                            // Propaga il click alla funzione piazzaSegnalino
                             piazzaSegnalino(e.latlng);
-                            // Impedisce al click di essere "mangiato" solo dalla provincia
                             L.DomEvent.stopPropagation(e);
                         });
                     }
