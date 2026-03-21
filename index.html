@@ -9,30 +9,63 @@
     <style>
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
+        
+        /* Stile delle province al passaggio del mouse */
         path.leaflet-interactive {
-            fill: #FDF6E3; fill-opacity: 1; stroke: #8C7B65; stroke-width: 1.5; transition: fill 0.3s;
+            fill: #FDF6E3; fill-opacity: 0.1; stroke: #8C7B65; stroke-width: 1.5; transition: fill 0.3s;
         }
-        path.leaflet-interactive:hover { fill: #EBE0C9; }
-        .leaflet-control-zoom { display: none; }
+        path.leaflet-interactive:hover { fill: #EBE0C9; fill-opacity: 0.6; }
+        
         .leaflet-control-attribution { font-size: 8px; }
+
+        /* Stile del tasto Conferma (inizialmente nascosto) */
+        #btn-conferma {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000; /* Lo tiene sopra la mappa */
+            padding: 15px 30px;
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: none; /* Appare solo quando metti il segnalino */
+        }
+        #btn-conferma:hover { background-color: #34495e; }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    
+    <button id="btn-conferma">Conferma Posizione</button>
+
     <script>
         // Coordinate bersaglio (ricevute da FlutterFlow)
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
-        let markerGiocatore;
+        let markerGiocatore = null;
+        let coordinateScelte = null; // Memorizza dove l'utente ha cliccato
 
         var map = L.map('map').setView([41.8719, 12.5674], 6);
 
-        // 1. ECCO LO SFONDO MANCANTE! Senza questo la mappa è invisibile
+        // Mappa di sfondo
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
+
+        // IL TUO SEGNALINO PERSONALIZZATO
+        var iconaPersonalizzata = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', // Sostituisci con l'URL del tuo PNG!
+            iconSize: [40, 40],
+            iconAnchor: [20, 40] // La "punta" del segnalino che tocca terra
+        });
 
         // Ascolta il messaggio da FlutterFlow
         window.addEventListener("message", function(event) {
@@ -53,35 +86,56 @@
             return R * c; 
         }
 
-        // Al tocco della mappa
-        map.on('click', function(e) {
-            const clickLat = e.latlng.lat;
-            const clickLon = e.latlng.lng;
+        // Funzione per posizionare il segnalino
+        function piazzaSegnalino(latlng) {
+            coordinateScelte = latlng;
 
             if (markerGiocatore) {
-                markerGiocatore.setLatLng(e.latlng);
+                markerGiocatore.setLatLng(latlng);
             } else {
-                markerGiocatore = L.marker(e.latlng).addTo(map);
+                markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
+                // Mostra il tasto conferma ora che il segnalino c'è
+                document.getElementById('btn-conferma').style.display = 'block';
             }
+        }
 
-            // Calcola la distanza
-            let distanzaKm = 0;
-            if (TARGET_LAT !== 0.0) {
-                distanzaKm = getDistanceFromLatLonInKm(clickLat, clickLon, TARGET_LAT, TARGET_LON);
-            }
-
-            // Invia SOLTANTO il numero dei chilometri a FlutterFlow
-window.parent.postMessage(distanzaKm.toFixed(2), "*");
+        // Al tocco della mappa
+        map.on('click', function(e) {
+            piazzaSegnalino(e.latlng);
         });
 
-        // 2. CONFINI ITALIANI (Usiamo il link sicuro e funzionante)
+        // Click sul tasto Conferma Posizione
+        document.getElementById('btn-conferma').addEventListener('click', function() {
+            if (!coordinateScelte) return;
+
+            let distanzaKm = 0;
+            if (TARGET_LAT !== 0.0) {
+                distanzaKm = getDistanceFromLatLonInKm(coordinateScelte.lat, coordinateScelte.lng, TARGET_LAT, TARGET_LON);
+            }
+
+            // Invia SOLTANTO ORA il numero dei chilometri a FlutterFlow
+            window.parent.postMessage(distanzaKm.toFixed(2), "*");
+            
+            // Opzionale: Nasconde il tasto dopo aver confermato
+            this.style.display = 'none'; 
+        });
+
+        // CONFINI ITALIANI
         var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
         fetch(urlProvince)
             .then(response => response.json())
-            .then(data => L.geoJSON(data).addTo(map))
+            .then(data => {
+                L.geoJSON(data, {
+                    // Assicuriamoci che i click sulle province vengano passati alla mappa
+                    onEachFeature: function (feature, layer) {
+                        layer.on('click', function (e) {
+                            piazzaSegnalino(e.latlng);
+                        });
+                    }
+                }).addTo(map);
+            })
             .catch(error => console.error('Errore GeoJSON:', error));
 
-        map.scrollWheelZoom.disable();
     </script>
 </body>
 </html>
