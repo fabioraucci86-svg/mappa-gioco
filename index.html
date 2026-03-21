@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mappa Italia</title>
+    <title>ItalGeo Map - Polling Version</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <style>
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
         
-        /* Confini delle province resi SOTTILISSIMI e chiarissimi */
+        /* Stile Province (Sottili) */
         path.leaflet-interactive {
             fill: #FDF6E3; 
             fill-opacity: 0.0; 
-            stroke: #d3ccc0;   /* Colore grigio/sabbia molto chiaro */
-            stroke-width: 0.5; /* Bordo dimezzato, quasi invisibile */
+            stroke: #d3ccc0;   
+            stroke-width: 0.5; 
             transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
-        
-        /* Effetto "illuminazione" al passaggio del mouse */
         path.leaflet-interactive:hover { 
             fill: #EBE0C9; 
             fill-opacity: 0.6; 
-            stroke-width: 1.0; /* Torna leggermente visibile al passaggio */
+            stroke-width: 1.0; 
         }
         
         .leaflet-control-zoom { display: block !important; }
@@ -34,12 +32,17 @@
     <div id="map"></div>
 
     <script>
-        // Variabili globali
+        // --- 1. VARIABILI GLOBALI (La "Lavagna" per il polling) ---
+        window.lastDistance = null;
+        window.lastScore = null;
+        
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let markerGiocatore = null;
+        let targetMarker = null; // Per mostrare dove era il punto reale
+        let line = null;         // Linea tra click e target
 
-        // Inizializzazione della mappa
+        // Inizializzazione mappa
         var map = L.map('map', {
             zoomControl: true,
             scrollWheelZoom: true,
@@ -47,30 +50,34 @@
             touchZoom: true
         }).setView([41.8719, 12.5674], 6);
 
-        // Aggiunta dello sfondo (strade, mari, ecc.)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // IL TUO SEGNALINO PERSONALIZZATO
         var iconaPersonalizzata = L.icon({
-            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', // Ricorda di mettere il tuo link PNG!
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png',
             iconSize: [40, 40],
             iconAnchor: [20, 40] 
         });
 
-        // Riceve le coordinate da FlutterFlow
+        // --- 2. RICEZIONE TARGET (Con controllo tipo messaggio) ---
         window.addEventListener("message", function(event) {
-            if (event.data && typeof event.data === 'string' && event.data.includes(',')) {
+            // Supportiamo sia il formato stringa che l'oggetto suggerito dal tecnico
+            if (event.data?.type === "TARGET") {
+                TARGET_LAT = event.data.lat;
+                TARGET_LON = event.data.lon;
+                console.log("Target ricevuto (Oggetto):", TARGET_LAT, TARGET_LON);
+            } else if (typeof event.data === 'string' && event.data.includes(',')) {
                 let coords = event.data.split(',');
                 TARGET_LAT = parseFloat(coords[0]);
                 TARGET_LON = parseFloat(coords[1]);
+                console.log("Target ricevuto (Stringa):", TARGET_LAT, TARGET_LON);
             }
         });
 
-        // Formula per calcolare i KM in linea d'aria
+        // Formula Haversine (Distanza)
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -80,67 +87,56 @@
             return R * c; 
         }
 
-        // Funzione che sposta il segnalino e invia i dati a FlutterFlow in tempo reale
-        function piazzaSegnalino(latlng) {
-            if (markerGiocatore) {
-                markerGiocatore.setLatLng(latlng);
-            } else {
-                markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
-            }
-
-            // Calcola la distanza
-            let distanzaKm = 0;
-            if (TARGET_LAT !== 0.0) {
-                distanzaKm = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
-            }
-            
-            let risultato = distanzaKm.toFixed(2);
-
-            // 1. TENTATIVO PER ANDROID (Usa il canale Javascript)
-            try {
-                if (typeof MappaChannel !== 'undefined') {
-                    MappaChannel.postMessage(risultato);
-                }
-            } catch(e) { console.log("Canale Android non trovato"); }
-
-            // 2. TENTATIVO PER WEB (Usa il parent postMessage)
-            try {
-                window.parent.postMessage(risultato, "*");
-            } catch(e) { console.log("Canale Web non trovato"); }
+        // Sistema Punteggio (Stile GeoGuessr)
+        function calcolaPunteggio(dist) {
+            const maxScore = 5000;
+            // Formula: il punteggio cala esponenzialmente con la distanza
+            return Math.round(maxScore * Math.exp(-dist / 200));
         }
 
-        // 1. DISEGNA I CONFINI DELLE REGIONI (Più spessi, solo visivi)
-        var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
-        fetch(urlRegioni)
-            .then(response => response.json())
+        // --- 3. FUNZIONE CORE: PIAZZA E SCRIVI DATI ---
+        function piazzaSegnalino(latlng) {
+            // Sposta marker giocatore
+            if (markerGiocatore) markerGiocatore.setLatLng(latlng);
+            else markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
+
+            if (TARGET_LAT !== 0.0) {
+                const dist = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
+                const score = calcolaPunteggio(dist);
+
+                // 👉 SALVATAGGIO SULLA LAVAGNA (Polling)
+                window.lastDistance = dist.toFixed(2);
+                window.lastScore = score;
+
+                // TENTATIVO POSTMESSAGE (Come backup)
+                try {
+                    window.top.postMessage(dist.toFixed(2), "*");
+                } catch(e) {}
+            }
+        }
+
+        // 4. DISEGNA I CONFINI REGIONI (Solo estetici)
+        fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+            .then(res => res.json())
             .then(data => {
                 L.geoJSON(data, {
-                    style: {
-                        color: '#947B5D',   // Colore del bordo della regione
-                        weight: 1.0,        // Spessore del bordo
-                        fillOpacity: 0.0,   // Interno trasparente
-                        interactive: false  // Lascia passare i click alle province sottostanti
-                    }
+                    style: { color: '#947B5D', weight: 1.5, fillOpacity: 0.0, interactive: false }
                 }).addTo(map);
-            })
-            .catch(error => console.error('Errore GeoJSON Regioni:', error));
+            });
 
-        // 2. Disegna le province italiane (E ASCOLTA I CLICK SOLO QUI)
-        var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
-        fetch(urlProvince)
-            .then(response => response.json())
+        // 5. DISEGNA LE PROVINCE (Interattive)
+        fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
+            .then(res => res.json())
             .then(data => {
                 L.geoJSON(data, {
                     onEachFeature: function (feature, layer) {
-                        // Se clicchi dentro una provincia, posiziona il segnalino
                         layer.on('click', function (e) {
                             piazzaSegnalino(e.latlng);
                             L.DomEvent.stopPropagation(e);
                         });
                     }
                 }).addTo(map);
-            })
-            .catch(error => console.error('Errore GeoJSON:', error));
+            });
 
     </script>
 </body>
