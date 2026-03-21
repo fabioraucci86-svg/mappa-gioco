@@ -62,17 +62,19 @@
             iconAnchor: [20, 40] 
         });
 
-        // --- 2. RICEZIONE TARGET ---
+        // --- 2. RICEZIONE TARGET RINFORZATA ---
         window.addEventListener("message", function(event) {
+            console.log("MAPPA: Messaggio ricevuto:", event.data);
+            
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
-                console.log("Target ricevuto (Oggetto):", TARGET_LAT, TARGET_LON);
+                console.log("MAPPA: Bersaglio impostato (Oggetto):", TARGET_LAT, TARGET_LON);
             } else if (typeof event.data === 'string' && event.data.includes(',')) {
                 let coords = event.data.split(',');
                 TARGET_LAT = parseFloat(coords[0]);
                 TARGET_LON = parseFloat(coords[1]);
-                console.log("Target ricevuto (Stringa):", TARGET_LAT, TARGET_LON);
+                console.log("MAPPA: Bersaglio impostato (Stringa):", TARGET_LAT, TARGET_LON);
             }
         });
 
@@ -96,17 +98,23 @@
             if (markerGiocatore) markerGiocatore.setLatLng(latlng);
             else markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
 
+            console.log("MAPPA: Click rilevato a", latlng.lat, latlng.lng);
+
             if (TARGET_LAT !== 0.0) {
                 const dist = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
                 const score = calcolaPunteggio(dist);
 
-                // Qui il test verrebbe sovrascritto dal calcolo reale se clicchi
+                // Aggiorniamo la "lavagna" per il polling
                 window.lastDistance = dist.toFixed(2);
                 window.lastScore = score;
+                
+                console.log("MAPPA: Distanza calcolata e salvata:", window.lastDistance);
 
                 try {
                     window.top.postMessage(dist.toFixed(2), "*");
                 } catch(e) {}
+            } else {
+                console.log("MAPPA: Attenzione, TARGET_LAT è ancora 0! Aspetto coordinate.");
             }
         }
 
@@ -123,7 +131,7 @@
         fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
             .then(res => res.json())
             .then(data => {
-                geojson = L.geoJSON(data, {
+                L.geoJSON(data, {
                     onEachFeature: function (feature, layer) {
                         layer.on('click', function (e) {
                             piazzaSegnalino(e.latlng);
