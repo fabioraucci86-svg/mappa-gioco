@@ -1,62 +1,61 @@
 <!DOCTYPE html>
-<html lang="it">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mappa Italia</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { margin: 0; padding: 0; background-color: #EBE8DF; }
-        #map { width: 100vw; height: 100vh; }
-        path.leaflet-interactive {
-            fill: #FDF6E3; fill-opacity: 1; stroke: #8C7B65; stroke-width: 1.5; transition: fill 0.3s;
-        }
-        path.leaflet-interactive:hover { fill: #EBE0C9; }
-        .leaflet-control-zoom { display: none; }
-        .leaflet-control-attribution { font-size: 8px; }
+        body { margin: 0; padding: 0; }
+        #map { width: 100vw; height: 100vh; background-color: #FDF6E3; } 
     </style>
 </head>
 <body>
     <div id="map"></div>
     <script>
-        // Coordinate bersaglio (ricevute da FlutterFlow)
-        let TARGET_LAT = 0.0;
-        let TARGET_LON = 0.0;
-        let markerGiocatore;
+        var map = L.map('map', {
+            center: [41.8719, 12.5674],
+            zoom: 6,
+            minZoom: 5,
+            maxZoom: 10,
+            zoomControl: false 
+        });
 
-        var map = L.map('map').setView([41.8719, 12.5674], 6);
-
-        // 1. ECCO LO SFONDO MANCANTE! Senza questo la mappa è invisibile
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
 
-        // Ascolta il messaggio da FlutterFlow
-        window.addEventListener("message", function(event) {
-            if (event.data && typeof event.data === 'string' && event.data.includes(',')) {
-                let coords = event.data.split(',');
-                TARGET_LAT = parseFloat(coords[0]);
-                TARGET_LON = parseFloat(coords[1]);
-            }
-        });
+        var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
+        fetch(urlProvince)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function (feature) {
+                        return { color: "#B22222", weight: 0.4, opacity: 0.4, fillOpacity: 0.0 };
+                    }
+                }).addTo(map);
+            });
 
-        // Formula matematica
-        function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-            const R = 6371; 
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c; 
-        }
+        var urlRegioni = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson';
+        fetch(urlRegioni)
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function (feature) {
+                        return { color: "#2F2F2F", weight: 0.9, opacity: 0.5, fillOpacity: 0.0 };
+                    },
+                    interactive: false 
+                }).addTo(map);
+            });
 
-        // Al tocco della mappa
+        var markerGiocatore;
+
         map.on('click', function(e) {
-            const clickLat = e.latlng.lat;
-            const clickLon = e.latlng.lng;
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
 
             if (markerGiocatore) {
                 markerGiocatore.setLatLng(e.latlng);
@@ -64,26 +63,12 @@
                 markerGiocatore = L.marker(e.latlng).addTo(map);
             }
 
-            // Calcola la distanza
-            let distanzaKm = 0;
-            if (TARGET_LAT !== 0.0) {
-                distanzaKm = getDistanceFromLatLonInKm(clickLat, clickLon, TARGET_LAT, TARGET_LON);
-            }
-
-            // Invia SOLTANTO il numero dei chilometri a FlutterFlow
+            // ECCO LA MODIFICA DEL TUO AMICO: USIAMO IL CHANNEL DI FLUTTERFLOW
             if (window.FFJavaScriptChannel) {
-                window.FFJavaScriptChannel.postMessage(distanzaKm.toFixed(2));
+                // Inviamo le coordinate separate da virgola
+                window.FFJavaScriptChannel.postMessage(lat + "," + lng);
             }
         });
-
-        // 2. CONFINI ITALIANI (Usiamo il link sicuro e funzionante)
-        var urlProvince = 'https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson';
-        fetch(urlProvince)
-            .then(response => response.json())
-            .then(data => L.geoJSON(data).addTo(map))
-            .catch(error => console.error('Errore GeoJSON:', error));
-
-        map.scrollWheelZoom.disable();
     </script>
 </body>
 </html>
