@@ -10,7 +10,7 @@
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
         
-        /* Stile Province (Sottili) */
+        /* Stile Province (Sottili) - MANTENUTO */
         path.leaflet-interactive {
             fill: #FDF6E3; 
             fill-opacity: 0.0; 
@@ -32,15 +32,13 @@
     <div id="map"></div>
 
     <script>
-        // --- 1. VARIABILI GLOBALI (TEST DEL 123 ATTIVO) ---
-        window.lastDistance = 123.45; // <--- VALORE FORZATO PER IL TEST
+        // --- 1. VARIABILI GLOBALI (LAVAGNA) ---
+        window.lastDistance = 123.45; // Test iniziale
         window.lastScore = 5000;
         
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let markerGiocatore = null;
-        let targetMarker = null; 
-        let line = null;         
 
         // Inizializzazione mappa
         var map = L.map('map', {
@@ -62,15 +60,18 @@
             iconAnchor: [20, 40] 
         });
 
-        // --- 2. RICEZIONE TARGET RINFORZATA ---
+        // --- 2. RICEZIONE TARGET (MODIFICATA PER OGGETTI) ---
         window.addEventListener("message", function(event) {
             console.log("MAPPA: Messaggio ricevuto:", event.data);
             
+            // Gestione formato OGGETTO (quello nuovo del widget Dart)
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
                 console.log("MAPPA: Bersaglio impostato (Oggetto):", TARGET_LAT, TARGET_LON);
-            } else if (typeof event.data === 'string' && event.data.includes(',')) {
+            } 
+            // Gestione formato STRINGA (vecchio formato per compatibilità)
+            else if (typeof event.data === 'string' && event.data.includes(',')) {
                 let coords = event.data.split(',');
                 TARGET_LAT = parseFloat(coords[0]);
                 TARGET_LON = parseFloat(coords[1]);
@@ -78,7 +79,6 @@
             }
         });
 
-        // Formula Haversine
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -93,28 +93,35 @@
             return Math.round(maxScore * Math.exp(-dist / 200));
         }
 
-        // --- 3. FUNZIONE CORE ---
+        // --- 3. FUNZIONE CORE (URLEÀ IL RISULTATO) ---
         function piazzaSegnalino(latlng) {
             if (markerGiocatore) markerGiocatore.setLatLng(latlng);
             else markerGiocatore = L.marker(latlng, { icon: iconaPersonalizzata }).addTo(map);
 
-            console.log("MAPPA: Click rilevato a", latlng.lat, latlng.lng);
+            console.log("MAPPA: Click a", latlng.lat, latlng.lng);
 
             if (TARGET_LAT !== 0.0) {
                 const dist = getDistanceFromLatLonInKm(latlng.lat, latlng.lng, TARGET_LAT, TARGET_LON);
                 const score = calcolaPunteggio(dist);
+                const risultato = dist.toFixed(2);
 
-                // Aggiorniamo la "lavagna" per il polling
-                window.lastDistance = dist.toFixed(2);
+                // Aggiorniamo window per il polling (Piano B)
+                window.lastDistance = risultato;
                 window.lastScore = score;
                 
-                console.log("MAPPA: Distanza calcolata e salvata:", window.lastDistance);
+                console.log("MAPPA: Distanza calcolata:", risultato);
 
+                // URLEÀ il risultato al genitore (Piano A - Il più potente)
                 try {
-                    window.top.postMessage(dist.toFixed(2), "*");
-                } catch(e) {}
+                    window.parent.postMessage({
+                        "type": "DISTANCE_RESULT",
+                        "value": risultato
+                    }, "*");
+                } catch(e) {
+                    console.error("MAPPA: Errore postMessage:", e);
+                }
             } else {
-                console.log("MAPPA: Attenzione, TARGET_LAT è ancora 0! Aspetto coordinate.");
+                console.warn("MAPPA: Bersaglio non ancora ricevuto (è ancora 0.0)");
             }
         }
 
