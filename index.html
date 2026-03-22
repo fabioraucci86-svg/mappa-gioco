@@ -17,7 +17,9 @@
             stroke-width: 0.5; 
             transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
-        path.leaflet-interactive:hover { 
+        
+        /* Hover per la selezione, attivo solo nelle modalità normali */
+        .hover-enabled path.leaflet-interactive:hover { 
             fill: #EBE0C9; 
             fill-opacity: 0.6; 
             stroke-width: 1.0; 
@@ -26,7 +28,6 @@
         .leaflet-control-zoom { display: block !important; }
         .leaflet-control-attribution { font-size: 8px; }
 
-        /* CLASSE PER IL BERSAGLIO ESATTO (Verde brillante e fisso) */
         .bersaglio-target {
             filter: drop-shadow(0px 0px 8px #00ff00) drop-shadow(0px 0px 15px #00ff00) !important;
             z-index: 1000 !important;
@@ -34,23 +35,28 @@
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <div id="map" class="hover-enabled"></div>
 
     <script>
         // --- 1. VARIABILI DI STATO ---
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let TARGET_NOME_PROVINCIA = ""; 
+        let LIVELLO_DIFFICOLTA = "Facile"; // Default
 
         let lastClickedLat = null;
         let lastClickedLon = null;
         let lastClickedProvincia = ""; 
         
         let markerGiocatore = null;
-        let markerBersaglioReale = null; // Il nuovo marker della soluzione
-        let lineaCollegamento = null;    // La linea tratteggiata
+        let markerBersaglioReale = null;
+        let lineaCollegamento = null;    
+        
+        // Salviamo i layer per poterli accendere/spegnere
+        let layerRegioni = null;
+        let layerProvince = null;
+        let layerItaliaOutline = null;
 
-        // Inizializzazione mappa
         var map = L.map('map', {
             zoomControl: true,
             scrollWheelZoom: true,
@@ -64,12 +70,7 @@
             maxZoom: 20
         }).addTo(map);
 
-        // --- TRUCCHETTO ANTI-SCHERMO GRIGIO ---
-        // Dice alla mappa di ricalcolare le sue dimensioni dopo mezzo secondo
-        setTimeout(function () {
-            map.invalidateSize();
-        }, 500);
-        // -------------------------------------
+        setTimeout(function () { map.invalidateSize(); }, 500);
 
         var iconaPersonalizzata = L.icon({
             iconUrl: 'https://raw.githubusercontent.com/fabioraucci86-svg/mappa-gioco/main/Bandieretta.png',
@@ -77,7 +78,6 @@
             iconAnchor: [2, 26] 
         });
 
-        // Icona per la soluzione esatta (Usa la classe CSS per illuminarsi di verde)
         var iconaTarget = L.icon({
             iconUrl: 'https://raw.githubusercontent.com/fabioraucci86-svg/mappa-gioco/main/Bandieretta.png',
             iconSize: [30, 30],
@@ -87,19 +87,26 @@
 
         // --- 2. ASCOLTATORE COMANDI DA FLUTTERFLOW ---
         window.addEventListener("message", function(event) {
+            
+            // IMPOSTA LA DIFFICOLTÀ (Per la modalità Impossibile)
+            if (event.data?.type === "INIT") {
+                LIVELLO_DIFFICOLTA = event.data.difficolta || "Facile";
+                console.log("MAPPA: Difficoltà impostata su ->", LIVELLO_DIFFICOLTA);
+                aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
+            }
+
+            // RICEVE LE COORDINATE DEL BERSAGLIO
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
-                TARGET_NOME_PROVINCIA = event.data.nomeProvincia; 
+                TARGET_NOME_PROVINCIA = event.data.nomeProvincia || ""; 
                 
-                // RESET PER IL NUOVO ROUND: Pulisce la mappa dai marker vecchi
+                // Pulisce il round precedente
                 if (markerBersaglioReale) map.removeLayer(markerBersaglioReale);
                 if (lineaCollegamento) map.removeLayer(lineaCollegamento);
                 if (markerGiocatore && markerGiocatore.getElement()) {
-                    markerGiocatore.getElement().style.filter = "none"; // Spegne l'aura
+                    markerGiocatore.getElement().style.filter = "none";
                 }
-                
-                console.log("MAPPA: Nuovo Round Iniziato ->", TARGET_NOME_PROVINCIA);
             } 
             
             if (event.data?.type === "CONFERMA") {
@@ -107,6 +114,61 @@
             }
         });
 
+        // --- 3. GESTIONE DELLA VISTA MAPPA (MODALITÀ IMPOSSIBILE) ---
+        function aggiornaVistaMappa(difficolta) {
+            // Pulisce i layer esistenti
+            if (layerRegioni) map.removeLayer(layerRegioni);
+            if (layerProvince) map.removeLayer(layerProvince);
+            if (layerItaliaOutline) map.removeLayer(layerItaliaOutline);
+
+            let mapDiv = document.getElementById("map");
+
+            if (difficolta === "Impossibile") {
+                // MODALITÀ IMPOSSIBILE: Niente province interattive, solo la base muta
+                mapDiv.classList.remove("hover-enabled");
+                
+                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+                    .then(res => res.json())
+                    .then(data => {
+                        layerItaliaOutline = L.geoJSON(data, { 
+                            style: { color: '#555555', weight: 2.0, fillOpacity: 0.1, fillColor: '#cccccc' },
+                            interactive: false 
+                        }).addTo(map);
+                    });
+                    
+                // Abilitiamo il click libero ovunque sulla mappa base
+                map.on('click', function(e) {
+                    gestisciClickMappa(e.latlng, "Sconosciuta"); 
+                });
+
+            } else {
+                // MODALITÀ NORMALI: Mostra Province e Regioni cliccabili
+                mapDiv.classList.add("hover-enabled");
+                map.off('click'); // Spegne il click libero per usare quello dei poligoni
+
+                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+                    .then(res => res.json())
+                    .then(data => {
+                        layerRegioni = L.geoJSON(data, { style: { color: '#947B5D', weight: 1.5, fillOpacity: 0.0, interactive: false } }).addTo(map);
+                    });
+
+                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
+                    .then(res => res.json())
+                    .then(data => {
+                        layerProvince = L.geoJSON(data, {
+                            onEachFeature: function (feature, layer) {
+                                layer.on('click', function (e) {
+                                    let nomeProv = feature.properties.prov_name || "";
+                                    gestisciClickMappa(e.latlng, nomeProv);
+                                    L.DomEvent.stopPropagation(e);
+                                });
+                            }
+                        }).addTo(map);
+                    });
+            }
+        }
+
+        // --- 4. CALCOLO E INVIO A FLUTTERFLOW ---
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -115,50 +177,39 @@
             return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))); 
         }
 
-        // --- 3. LOGICA DI INVIO RISULTATO ED EFFETTI VISIVI ---
         function calcolaEInviaRisultato() {
             if (!lastClickedLat) return;
 
-            let distanzaFinale = 0;
-            const pulisci = (t) => t ? t.toLowerCase().replace(/\s+/g, '').trim() : "";
-            let nomeCliccato = pulisci(lastClickedProvincia);
-            let nomeTarget = pulisci(TARGET_NOME_PROVINCIA);
-
-            // Controllo Sagoma (0 KM)
-            if (nomeCliccato !== "" && nomeTarget !== "" && 
-               (nomeCliccato === nomeTarget || nomeCliccato.includes(nomeTarget) || nomeTarget.includes(nomeCliccato))) {
-                distanzaFinale = 0.00;
-            } else {
-                distanzaFinale = getDistanceFromLatLonInKm(lastClickedLat, lastClickedLon, TARGET_LAT, TARGET_LON);
-            }
-
-            // --- ANIMAZIONI E COLORI DOPO LA CONFERMA ---
+            // Calcolo distanza matematica
+            let distanzaFinale = getDistanceFromLatLonInKm(lastClickedLat, lastClickedLon, TARGET_LAT, TARGET_LON);
             
-            // 1. Appare il bersaglio corretto
+            // Animazioni sulla mappa (Bersaglio e linea)
             markerBersaglioReale = L.marker([TARGET_LAT, TARGET_LON], { icon: iconaTarget }).addTo(map);
 
-            // 2. Disegna la linea tratteggiata tra i due punti
             lineaCollegamento = L.polyline([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]], {
                 color: '#4a4a4a', weight: 2, dashArray: '5, 10'
             }).addTo(map);
 
-            // 3. Colora la tua bandierina in base ai KM
+            // COLORI DEL MARKER BASATI SULLE TUE REGOLE (20km e 100km)
             if (markerGiocatore && markerGiocatore.getElement()) {
                 let iconaDom = markerGiocatore.getElement();
                 if (distanzaFinale <= 20) {
-                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #28a745) drop-shadow(0px 0px 15px #28a745)"; // Verde
+                    // Verde = Vittoria/Ottimo
+                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #28a745) drop-shadow(0px 0px 15px #28a745)";
                 } else if (distanzaFinale <= 100) {
-                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #ffc107) drop-shadow(0px 0px 15px #ffc107)"; // Arancione
+                    // Arancione = Medio/Vicino
+                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #ffc107) drop-shadow(0px 0px 15px #ffc107)"; 
                 } else {
-                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #dc3545) drop-shadow(0px 0px 15px #dc3545)"; // Rosso
+                    // Rosso = Sbagliato/Lontano
+                    iconaDom.style.filter = "drop-shadow(0px 0px 8px #dc3545) drop-shadow(0px 0px 15px #dc3545)";
                 }
             }
 
-            // 4. Allarga la visuale per mostrare entrambe le bandierine (Zoom Out automatico)
+            // Allarga la visuale per vedere entrambi i punti
             let confini = L.latLngBounds([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]]);
             map.fitBounds(confini, { padding: [50, 50], maxZoom: 12 });
 
-            // Invia risultato a FlutterFlow
+            // Invia la distanza a FlutterFlow (che applicherà le sue regole per dare i punti)
             window.parent.postMessage({
                 "type": "DISTANCE_RESULT",
                 "value": distanzaFinale.toFixed(2)
@@ -174,27 +225,8 @@
             lastClickedProvincia = nomeProvinciaCliccata;
         }
 
-        // DISEGNA I CONFINI REGIONI
-        fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
-            .then(res => res.json())
-            .then(data => {
-                L.geoJSON(data, { style: { color: '#947B5D', weight: 1.5, fillOpacity: 0.0, interactive: false } }).addTo(map);
-            });
-
-        // DISEGNA LE PROVINCE
-        fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
-            .then(res => res.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    onEachFeature: function (feature, layer) {
-                        layer.on('click', function (e) {
-                            let nomeProv = feature.properties.prov_name || "";
-                            gestisciClickMappa(e.latlng, nomeProv);
-                            L.DomEvent.stopPropagation(e);
-                        });
-                    }
-                }).addTo(map);
-            });
+        // Avvio mappa (assicurandosi che i layer partano in base al livello base)
+        aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
     </script>
 </body>
 </html>
