@@ -43,10 +43,16 @@
         let TARGET_LON = 0.0;
         let TARGET_NOME_PROVINCIA = ""; 
         let LIVELLO_DIFFICOLTA = "Facile"; // Default
-        // Legge la difficoltà direttamente dall'URL
+// Legge la difficoltà dall'URL e la corregge automaticamente
 const parametriUrl = new URLSearchParams(window.location.search);
 if (parametriUrl.has('difficolta')) {
-    LIVELLO_DIFFICOLTA = parametriUrl.get('difficolta');
+    let diffInviata = parametriUrl.get('difficolta');
+    // Se c'è scritto "impossibile" (minuscolo o maiuscolo), lo forza al formato corretto per il codice
+    if (diffInviata.toLowerCase() === 'impossibile') {
+        LIVELLO_DIFFICOLTA = "Impossibile";
+    } else {
+        LIVELLO_DIFFICOLTA = diffInviata;
+    }
 }
 
         let lastClickedLat = null;
