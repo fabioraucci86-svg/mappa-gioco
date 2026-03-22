@@ -138,7 +138,7 @@ if (parametriUrl.has('difficolta')) {
                 // MODALITÀ IMPOSSIBILE: Niente province interattive, solo la base muta
                 mapDiv.classList.remove("hover-enabled");
                 
-                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+                fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries/ITA.geo.json')
                     .then(res => res.json())
                     .then(data => {
                         layerItaliaOutline = L.geoJSON(data, { 
