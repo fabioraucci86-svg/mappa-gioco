@@ -43,17 +43,18 @@
         let TARGET_LON = 0.0;
         let TARGET_NOME_PROVINCIA = ""; 
         let LIVELLO_DIFFICOLTA = "Facile"; // Default
-// Legge la difficoltà dall'URL e la corregge automaticamente
-const parametriUrl = new URLSearchParams(window.location.search);
-if (parametriUrl.has('difficolta')) {
-    let diffInviata = parametriUrl.get('difficolta');
-    // Se c'è scritto "impossibile" (minuscolo o maiuscolo), lo forza al formato corretto per il codice
-    if (diffInviata.toLowerCase() === 'impossibile') {
-        LIVELLO_DIFFICOLTA = "Impossibile";
-    } else {
-        LIVELLO_DIFFICOLTA = diffInviata;
-    }
-}
+
+        // Legge la difficoltà dall'URL e la corregge automaticamente
+        const parametriUrl = new URLSearchParams(window.location.search);
+        if (parametriUrl.has('difficolta')) {
+            let diffInviata = parametriUrl.get('difficolta');
+            // Se c'è scritto "impossibile" (minuscolo o maiuscolo), lo forza al formato corretto per il codice
+            if (diffInviata.toLowerCase() === 'impossibile') {
+                LIVELLO_DIFFICOLTA = "Impossibile";
+            } else {
+                LIVELLO_DIFFICOLTA = diffInviata;
+            }
+        }
 
         let lastClickedLat = null;
         let lastClickedLon = null;
@@ -125,7 +126,7 @@ if (parametriUrl.has('difficolta')) {
             }
         });
 
-// --- 3. GESTIONE DELLA VISTA MAPPA ---
+        // --- 3. GESTIONE DELLA VISTA MAPPA ---
         function aggiornaVistaMappa(difficolta) {
             // Pulisce i layer esistenti
             if (layerRegioni) map.removeLayer(layerRegioni);
@@ -135,15 +136,15 @@ if (parametriUrl.has('difficolta')) {
             let mapDiv = document.getElementById("map");
 
             if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE: Alta risoluzione, ma linee interne invisibili!
+                // MODALITÀ IMPOSSIBILE: Blocco solido e opaco al 100%!
                 mapDiv.classList.remove("hover-enabled");
                 
                 fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
                     .then(data => {
                         layerItaliaOutline = L.geoJSON(data, { 
-                            // Il trucco magico: colore del bordo uguale al riempimento
-                            style: { color: '#d3ccc0', weight: 1.5, fillOpacity: 0.4, fillColor: '#d3ccc0' },
+                            // Il trucco magico: opacità e fillOpacity a 1
+                            style: { color: '#d3ccc0', opacity: 1, weight: 1.5, fillOpacity: 1, fillColor: '#d3ccc0' },
                             interactive: false 
                         }).addTo(map);
                     });
@@ -179,6 +180,7 @@ if (parametriUrl.has('difficolta')) {
                     });
             }
         }
+
         // --- 4. CALCOLO E INVIO A FLUTTERFLOW ---
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
