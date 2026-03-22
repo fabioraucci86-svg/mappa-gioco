@@ -43,6 +43,11 @@
         let TARGET_LON = 0.0;
         let TARGET_NOME_PROVINCIA = ""; 
         let LIVELLO_DIFFICOLTA = "Facile"; // Default
+        // Legge la difficoltà direttamente dall'URL
+const parametriUrl = new URLSearchParams(window.location.search);
+if (parametriUrl.has('difficolta')) {
+    LIVELLO_DIFFICOLTA = parametriUrl.get('difficolta');
+}
 
         let lastClickedLat = null;
         let lastClickedLon = null;
