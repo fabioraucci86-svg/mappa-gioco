@@ -6,6 +6,7 @@
     <title>ItalGeo Map - Pro Version</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
@@ -48,7 +49,6 @@
         const parametriUrl = new URLSearchParams(window.location.search);
         if (parametriUrl.has('difficolta')) {
             let diffInviata = parametriUrl.get('difficolta');
-            // Se c'è scritto "impossibile" (minuscolo o maiuscolo), lo forza al formato corretto per il codice
             if (diffInviata.toLowerCase() === 'impossibile') {
                 LIVELLO_DIFFICOLTA = "Impossibile";
             } else {
@@ -100,20 +100,17 @@
         // --- 2. ASCOLTATORE COMANDI DA FLUTTERFLOW ---
         window.addEventListener("message", function(event) {
             
-            // IMPOSTA LA DIFFICOLTÀ (Per la modalità Impossibile)
             if (event.data?.type === "INIT") {
                 LIVELLO_DIFFICOLTA = event.data.difficolta || "Facile";
                 console.log("MAPPA: Difficoltà impostata su ->", LIVELLO_DIFFICOLTA);
                 aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
             }
 
-            // RICEVE LE COORDINATE DEL BERSAGLIO
             if (event.data?.type === "TARGET") {
                 TARGET_LAT = event.data.lat;
                 TARGET_LON = event.data.lon;
                 TARGET_NOME_PROVINCIA = event.data.nomeProvincia || ""; 
                 
-                // Pulisce il round precedente
                 if (markerBersaglioReale) map.removeLayer(markerBersaglioReale);
                 if (lineaCollegamento) map.removeLayer(lineaCollegamento);
                 if (markerGiocatore && markerGiocatore.getElement()) {
@@ -128,7 +125,6 @@
 
         // --- 3. GESTIONE DELLA VISTA MAPPA ---
         function aggiornaVistaMappa(difficolta) {
-            // Pulisce i layer esistenti
             if (layerRegioni) map.removeLayer(layerRegioni);
             if (layerProvince) map.removeLayer(layerProvince);
             if (layerItaliaOutline) map.removeLayer(layerItaliaOutline);
@@ -136,26 +132,28 @@
             let mapDiv = document.getElementById("map");
 
             if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE: Blocco solido e opaco al 100%!
+                // MODALITÀ IMPOSSIBILE: Contorno netto ad altissima risoluzione, interno vuoto e trasparente!
                 mapDiv.classList.remove("hover-enabled");
                 
                 fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
                     .then(data => {
-                        layerItaliaOutline = L.geoJSON(data, { 
-                            // Il trucco magico: opacità e fillOpacity a 1
-                            style: { color: '#d3ccc0', opacity: 1, weight: 1.5, fillOpacity: 1, fillColor: '#d3ccc0' },
+                        // LA MAGIA: Turf.js dissolve i confini interni e crea un blocco unico!
+                        let italiaUnita = turf.dissolve(data);
+
+                        layerItaliaOutline = L.geoJSON(italiaUnita, { 
+                            // Bordo grigio visibile (weight: 2), interno completamente trasparente (fillOpacity: 0)
+                            style: { color: '#666666', weight: 2.0, fillOpacity: 0.0 },
                             interactive: false 
                         }).addTo(map);
                     });
                     
-                // Abilitiamo il click libero ovunque sulla mappa base
                 map.on('click', function(e) {
                     gestisciClickMappa(e.latlng, "Sconosciuta"); 
                 });
 
             } else {
-                // MODALITÀ NORMALI: Mostra Province e Regioni cliccabili (QUESTO NON SI TOCCA!)
+                // MODALITÀ NORMALI: Province e Regioni cliccabili
                 mapDiv.classList.add("hover-enabled");
                 map.off('click'); 
 
@@ -192,37 +190,28 @@
 
         function calcolaEInviaRisultato() {
             if (!lastClickedLat) return;
-
-            // Calcolo distanza matematica
             let distanzaFinale = getDistanceFromLatLonInKm(lastClickedLat, lastClickedLon, TARGET_LAT, TARGET_LON);
             
-            // Animazioni sulla mappa (Bersaglio e linea)
             markerBersaglioReale = L.marker([TARGET_LAT, TARGET_LON], { icon: iconaTarget }).addTo(map);
 
             lineaCollegamento = L.polyline([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]], {
                 color: '#4a4a4a', weight: 2, dashArray: '5, 10'
             }).addTo(map);
 
-            // COLORI DEL MARKER BASATI SULLE TUE REGOLE (20km e 100km)
             if (markerGiocatore && markerGiocatore.getElement()) {
                 let iconaDom = markerGiocatore.getElement();
                 if (distanzaFinale <= 20) {
-                    // Verde = Vittoria/Ottimo
                     iconaDom.style.filter = "drop-shadow(0px 0px 8px #28a745) drop-shadow(0px 0px 15px #28a745)";
                 } else if (distanzaFinale <= 100) {
-                    // Arancione = Medio/Vicino
                     iconaDom.style.filter = "drop-shadow(0px 0px 8px #ffc107) drop-shadow(0px 0px 15px #ffc107)"; 
                 } else {
-                    // Rosso = Sbagliato/Lontano
                     iconaDom.style.filter = "drop-shadow(0px 0px 8px #dc3545) drop-shadow(0px 0px 15px #dc3545)";
                 }
             }
 
-            // Allarga la visuale per vedere entrambi i punti
             let confini = L.latLngBounds([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]]);
             map.fitBounds(confini, { padding: [50, 50], maxZoom: 12 });
 
-            // Invia la distanza a FlutterFlow (che applicherà le sue regole per dare i punti)
             window.parent.postMessage({
                 "type": "DISTANCE_RESULT",
                 "value": distanzaFinale.toFixed(2)
@@ -238,7 +227,6 @@
             lastClickedProvincia = nomeProvinciaCliccata;
         }
 
-        // Avvio mappa (assicurandosi che i layer partano in base al livello base)
         aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
     </script>
 </body>
