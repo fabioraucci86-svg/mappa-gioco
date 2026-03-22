@@ -125,7 +125,7 @@ if (parametriUrl.has('difficolta')) {
             }
         });
 
-        // --- 3. GESTIONE DELLA VISTA MAPPA (MODALITÀ IMPOSSIBILE) ---
+// --- 3. GESTIONE DELLA VISTA MAPPA ---
         function aggiornaVistaMappa(difficolta) {
             // Pulisce i layer esistenti
             if (layerRegioni) map.removeLayer(layerRegioni);
@@ -135,14 +135,15 @@ if (parametriUrl.has('difficolta')) {
             let mapDiv = document.getElementById("map");
 
             if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE: Niente province interattive, solo la base muta
+                // MODALITÀ IMPOSSIBILE: Alta risoluzione, ma linee interne invisibili!
                 mapDiv.classList.remove("hover-enabled");
                 
-                fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries/ITA.geo.json')
+                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
                     .then(data => {
                         layerItaliaOutline = L.geoJSON(data, { 
-                            style: { color: '#555555', weight: 2.0, fillOpacity: 0.1, fillColor: '#cccccc' },
+                            // Il trucco magico: colore del bordo uguale al riempimento
+                            style: { color: '#d3ccc0', weight: 1.5, fillOpacity: 0.4, fillColor: '#d3ccc0' },
                             interactive: false 
                         }).addTo(map);
                     });
@@ -153,9 +154,9 @@ if (parametriUrl.has('difficolta')) {
                 });
 
             } else {
-                // MODALITÀ NORMALI: Mostra Province e Regioni cliccabili
+                // MODALITÀ NORMALI: Mostra Province e Regioni cliccabili (QUESTO NON SI TOCCA!)
                 mapDiv.classList.add("hover-enabled");
-                map.off('click'); // Spegne il click libero per usare quello dei poligoni
+                map.off('click'); 
 
                 fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
@@ -178,7 +179,6 @@ if (parametriUrl.has('difficolta')) {
                     });
             }
         }
-
         // --- 4. CALCOLO E INVIO A FLUTTERFLOW ---
         function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
             const R = 6371; 
