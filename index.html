@@ -111,11 +111,18 @@
                 TARGET_LON = event.data.lon;
                 TARGET_NOME_PROVINCIA = event.data.nomeProvincia || ""; 
                 
+                // PULIZIA DEL ROUND PRECEDENTE E ZOOM INDIETRO
                 if (markerBersaglioReale) map.removeLayer(markerBersaglioReale);
                 if (lineaCollegamento) map.removeLayer(lineaCollegamento);
-                if (markerGiocatore && markerGiocatore.getElement()) {
-                    markerGiocatore.getElement().style.filter = "none";
+                
+                // Togliamo anche il marker del giocatore dal round prima!
+                if (markerGiocatore) {
+                    map.removeLayer(markerGiocatore);
+                    markerGiocatore = null;
                 }
+                
+                // Resettiamo la visuale sulla mappa intera dell'Italia (Punto 1 richiesto)
+                map.setView([41.8719, 12.5674], 6);
             } 
             
             if (event.data?.type === "CONFERMA") {
@@ -132,25 +139,27 @@
             let mapDiv = document.getElementById("map");
 
             if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE: Contorno netto ad altissima risoluzione, interno vuoto e trasparente!
+                // MODALITÀ IMPOSSIBILE: Contorno netto, niente hover, interattivo SOLO sulla terraferma
                 mapDiv.classList.remove("hover-enabled");
-                
+                map.off('click'); // Rimuoviamo il click sul mare
+
                 fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
                     .then(data => {
-                        // LA MAGIA: Turf.js dissolve i confini interni e crea un blocco unico!
                         let italiaUnita = turf.dissolve(data);
 
                         layerItaliaOutline = L.geoJSON(italiaUnita, { 
-                            // Bordo grigio visibile (weight: 2), interno completamente trasparente (fillOpacity: 0)
-                            style: { color: '#666666', weight: 3.5, fillOpacity: -1.0 },
-                            interactive: false 
+                            // Il trucco: opacità 0.01 lo rende invisibile ma permette il click sull'area interna!
+                            style: { color: '#666666', weight: 3.5, fillColor: '#ffffff', fillOpacity: 0.01 },
+                            onEachFeature: function (feature, layer) {
+                                // Aggiungiamo il click SOLO al poligono Italia (Punto 3 richiesto)
+                                layer.on('click', function (e) {
+                                    gestisciClickMappa(e.latlng, "Sconosciuta");
+                                    L.DomEvent.stopPropagation(e);
+                                });
+                            }
                         }).addTo(map);
                     });
-                    
-                map.on('click', function(e) {
-                    gestisciClickMappa(e.latlng, "Sconosciuta"); 
-                });
 
             } else {
                 // MODALITÀ NORMALI: Province e Regioni cliccabili
@@ -194,8 +203,9 @@
             
             markerBersaglioReale = L.marker([TARGET_LAT, TARGET_LON], { icon: iconaTarget }).addTo(map);
 
+            // Linea più marcata (Punto 2 richiesto: weight a 4)
             lineaCollegamento = L.polyline([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]], {
-                color: '#4a4a4a', weight: 2, dashArray: '5, 10'
+                color: '#2b2b2b', weight: 4, dashArray: '8, 8'
             }).addTo(map);
 
             if (markerGiocatore && markerGiocatore.getElement()) {
