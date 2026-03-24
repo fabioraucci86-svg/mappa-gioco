@@ -6,7 +6,6 @@
     <title>ItalGeo Map - Pro Version</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background-color: #EBE8DF; }
         #map { width: 100vw; height: 100vh; }
@@ -19,7 +18,7 @@
             transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
         
-        /* Hover per la selezione, attivo solo nelle modalità normali */
+        /* Hover attivo solo nelle modalità normali */
         .hover-enabled path.leaflet-interactive:hover { 
             fill: #EBE0C9; 
             fill-opacity: 0.6; 
@@ -43,16 +42,12 @@
         let TARGET_LAT = 0.0;
         let TARGET_LON = 0.0;
         let TARGET_NOME_PROVINCIA = ""; 
-        let LIVELLO_DIFFICOLTA = "Facile"; // Default
+        let LIVELLO_DIFFICOLTA = "Facile"; 
 
         const parametriUrl = new URLSearchParams(window.location.search);
         if (parametriUrl.has('difficolta')) {
             let diffInviata = parametriUrl.get('difficolta');
-            if (diffInviata.toLowerCase() === 'impossibile') {
-                LIVELLO_DIFFICOLTA = "Impossibile";
-            } else {
-                LIVELLO_DIFFICOLTA = diffInviata;
-            }
+            LIVELLO_DIFFICOLTA = (diffInviata.toLowerCase() === 'impossibile') ? "Impossibile" : diffInviata;
         }
 
         let lastClickedLat = null;
@@ -65,7 +60,6 @@
         
         let layerRegioni = null;
         let layerProvince = null;
-        let layerItaliaOutline = null;
 
         var map = L.map('map', {
             zoomControl: true,
@@ -74,8 +68,8 @@
             touchZoom: true
         });
 
-        // INQUADRATURA INIZIALE PERFETTA (Tutta Italia)
-        map.fitBounds([[36.5, 6.6], [47.1, 18.5]]);
+        // Inquadratura fissa e velocissima sull'Italia (Centro esatto, zoom 6)
+        map.setView([41.8719, 12.5674], 6);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap',
@@ -103,7 +97,6 @@
             
             if (event.data?.type === "INIT") {
                 LIVELLO_DIFFICOLTA = event.data.difficolta || "Facile";
-                console.log("MAPPA: Difficoltà impostata su ->", LIVELLO_DIFFICOLTA);
                 aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
             }
 
@@ -112,13 +105,13 @@
                 TARGET_LON = event.data.lon;
                 TARGET_NOME_PROVINCIA = event.data.nomeProvincia || ""; 
                 
-                // PULIZIA ISTANTANEA DEL ROUND PRECEDENTE
+                // PULIZIA FULMINEA (0 millisecondi)
                 if (markerBersaglioReale) { map.removeLayer(markerBersaglioReale); markerBersaglioReale = null; }
                 if (lineaCollegamento) { map.removeLayer(lineaCollegamento); lineaCollegamento = null; }
                 if (markerGiocatore) { map.removeLayer(markerGiocatore); markerGiocatore = null; lastClickedLat = null; }
                 
-                // ZOOM INDIETRO FULMINEO (Niente attese)
-                map.fitBounds([[36.5, 6.6], [47.1, 18.5]], { animate: false });
+                // TELETRASPORTO INDIETRO ISTANTANEO
+                map.setView([41.8719, 12.5674], 6, { animate: false, duration: 0 });
             } 
             
             if (event.data?.type === "CONFERMA") {
@@ -130,26 +123,23 @@
         function aggiornaVistaMappa(difficolta) {
             if (layerRegioni) { map.removeLayer(layerRegioni); layerRegioni = null; }
             if (layerProvince) { map.removeLayer(layerProvince); layerProvince = null; }
-            if (layerItaliaOutline) { map.removeLayer(layerItaliaOutline); layerItaliaOutline = null; }
 
             let mapDiv = document.getElementById("map");
 
             if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE
-                mapDiv.classList.remove("hover-enabled");
-                map.off('click'); // Niente click sul mare
+                // MODALITÀ IMPOSSIBILE: Sicura e funzionante!
+                mapDiv.classList.remove("hover-enabled"); // Niente effetto illuminazione
+                map.off('click'); // Disattiva il click sul mare
 
+                // Usiamo il file sicuro delle regioni
                 fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
                     .then(res => res.json())
                     .then(data => {
-                        let italiaUnita = turf.dissolve(data);
-
-                        layerItaliaOutline = L.geoJSON(italiaUnita, { 
+                        layerRegioni = L.geoJSON(data, { 
                             style: { 
-                                color: '#1a1a1a', // Bordo scuro
-                                weight: 3.5,      // Spessore bordo
-                                fillColor: '#ffffff', 
-                                fillOpacity: 0.01 // Invisibile ma cliccabile!
+                                color: '#1a1a1a', // Confini neri e marcati
+                                weight: 2.5,      // Più spessi del normale
+                                fillOpacity: 0.01 // Opacità invisibile ma che cattura il dito!
                             },
                             onEachFeature: function (feature, layer) {
                                 layer.on('click', function (e) {
@@ -161,7 +151,7 @@
                     });
 
             } else {
-                // MODALITÀ NORMALI (Il tuo codice originale intatto!)
+                // MODALITÀ NORMALI (Originale intatto)
                 mapDiv.classList.add("hover-enabled");
                 map.off('click'); 
 
@@ -202,7 +192,7 @@
             
             markerBersaglioReale = L.marker([TARGET_LAT, TARGET_LON], { icon: iconaTarget }).addTo(map);
 
-            // Linea marcata scura e spessa (Weight: 4)
+            // Linea nera, spessa e tratteggiata per la distanza
             lineaCollegamento = L.polyline([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]], {
                 color: '#1a1a1a', weight: 4, dashArray: '6, 6'
             }).addTo(map);
@@ -218,6 +208,7 @@
                 }
             }
 
+            // Quando calcola il risultato, fa lo zoom morbido per far vedere il punteggio
             let confini = L.latLngBounds([[lastClickedLat, lastClickedLon], [TARGET_LAT, TARGET_LON]]);
             map.fitBounds(confini, { padding: [50, 50], maxZoom: 12 });
 
