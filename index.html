@@ -18,7 +18,7 @@
             transition: fill-opacity 0.2s, stroke-width 0.2s;
         }
         
-        /* Hover attivo solo nelle modalità normali */
+        /* Hover attivo per tutte le modalità */
         .hover-enabled path.leaflet-interactive:hover { 
             fill: #EBE0C9; 
             fill-opacity: 0.6; 
@@ -68,7 +68,7 @@
             touchZoom: true
         });
 
-        // Inquadratura fissa e velocissima sull'Italia (Centro esatto, zoom 4)
+        // Inquadratura fissa e velocissima sull'Italia (Centro esatto, zoom 5)
         map.setView([41.8719, 12.5674], 5);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
@@ -97,7 +97,7 @@
             
             if (event.data?.type === "INIT") {
                 LIVELLO_DIFFICOLTA = event.data.difficolta || "Facile";
-                aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
+                aggiornaVistaMappa(); // Tolto il parametro difficoltà, la mappa è sempre uguale!
             }
 
             if (event.data?.type === "TARGET") {
@@ -120,61 +120,35 @@
         });
 
         // --- 3. GESTIONE DELLA VISTA MAPPA ---
-        function aggiornaVistaMappa(difficolta) {
+        function aggiornaVistaMappa() {
             if (layerRegioni) { map.removeLayer(layerRegioni); layerRegioni = null; }
             if (layerProvince) { map.removeLayer(layerProvince); layerProvince = null; }
 
             let mapDiv = document.getElementById("map");
 
-            if (difficolta === "Impossibile") {
-                // MODALITÀ IMPOSSIBILE: Sicura e funzionante!
-                mapDiv.classList.remove("hover-enabled"); // Niente effetto illuminazione
-                map.off('click'); // Disattiva il click sul mare
+            // Applichiamo la stessa grafica e logica a TUTTI i livelli
+            mapDiv.classList.add("hover-enabled");
+            map.off('click'); 
 
-                // Usiamo il file sicuro delle regioni
-                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
-                    .then(res => res.json())
-                    .then(data => {
-                        layerRegioni = L.geoJSON(data, { 
-                            style: { 
-                                color: '#1a1a1a', // Confini neri e marcati
-                                weight: 2.5,      // Più spessi del normale
-                                fillOpacity: 0.01 // Opacità invisibile ma che cattura il dito!
-                            },
-                            onEachFeature: function (feature, layer) {
-                                layer.on('click', function (e) {
-                                    gestisciClickMappa(e.latlng, "Sconosciuta");
-                                    L.DomEvent.stopPropagation(e);
-                                });
-                            }
-                        }).addTo(map);
-                    });
+            fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
+                .then(res => res.json())
+                .then(data => {
+                    layerRegioni = L.geoJSON(data, { style: { color: '#947B5D', weight: 1.5, fillOpacity: 0.0, interactive: false } }).addTo(map);
+                });
 
-            } else {
-                // MODALITÀ NORMALI (Originale intatto)
-                mapDiv.classList.add("hover-enabled");
-                map.off('click'); 
-
-                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson')
-                    .then(res => res.json())
-                    .then(data => {
-                        layerRegioni = L.geoJSON(data, { style: { color: '#947B5D', weight: 1.5, fillOpacity: 0.0, interactive: false } }).addTo(map);
-                    });
-
-                fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
-                    .then(res => res.json())
-                    .then(data => {
-                        layerProvince = L.geoJSON(data, {
-                            onEachFeature: function (feature, layer) {
-                                layer.on('click', function (e) {
-                                    let nomeProv = feature.properties.prov_name || "";
-                                    gestisciClickMappa(e.latlng, nomeProv);
-                                    L.DomEvent.stopPropagation(e);
-                                });
-                            }
-                        }).addTo(map);
-                    });
-            }
+            fetch('https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_provinces.geojson')
+                .then(res => res.json())
+                .then(data => {
+                    layerProvince = L.geoJSON(data, {
+                        onEachFeature: function (feature, layer) {
+                            layer.on('click', function (e) {
+                                let nomeProv = feature.properties.prov_name || "";
+                                gestisciClickMappa(e.latlng, nomeProv);
+                                L.DomEvent.stopPropagation(e);
+                            });
+                        }
+                    }).addTo(map);
+                });
         }
 
         // --- 4. CALCOLO E INVIO A FLUTTERFLOW ---
@@ -227,7 +201,8 @@
             lastClickedProvincia = nomeProvinciaCliccata;
         }
 
-        aggiornaVistaMappa(LIVELLO_DIFFICOLTA);
+        // Avvio iniziale
+        aggiornaVistaMappa();
     </script>
 </body>
 </html>
